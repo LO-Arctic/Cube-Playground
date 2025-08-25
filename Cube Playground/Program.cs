@@ -46,7 +46,7 @@ namespace Cube_Playground
                 List<RegSection> regSectionSearchResponse = await CubeService.RegSectionSearch(myBook.SourceId, myBook.VersionOrdinal);
                 Console.WriteLine();
 
-                ComplianceModel complianceModel = new()
+                ComplianceModel complianceImportModel = new()
                 {
                     FormId = -2,
                     DomainName = "PVT Domain",
@@ -54,33 +54,36 @@ namespace Cube_Playground
                     ComplianceTiers = new()
                 };
 
-                Console.WriteLine("SECTIONS");
-
                 int order = 0;
 
+                Console.WriteLine("SECTIONS");
                 foreach (RegSection section in regSectionSearchResponse.Where(x => x.ParentId == null))
                 {
                     PrintSectionInfo(section, regSectionSearchResponse);
-                    ComplianceTier childTier = new ComplianceTier()
-                    {
-                        Name = section.Title,
-                        Order = order++,
-                        Description = section.Content,
-                        ChildTiers = new(),
-                        Obligations = new()
-                    };
-                    complianceModel.ComplianceTiers.Add(childTier);
-                    AddTierChildren(section, childTier, regSectionSearchResponse);
+                    AddImportModelRootTier(regSectionSearchResponse, complianceImportModel, order++, section);
                 }
 
-                string jsonComplianceModel = JsonConvert.SerializeObject(complianceModel, Formatting.None, new JsonSerializerSettings());
+                string jsonComplianceImportModel = JsonConvert.SerializeObject(complianceImportModel, Formatting.None, new JsonSerializerSettings());
 
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Check your parameters! {ex.Message}");
             }
+        }
 
+        private static void AddImportModelRootTier(List<RegSection> regSectionSearchResponse, ComplianceModel complianceModel, int order, RegSection section)
+        {
+            ComplianceTier childTier = new ComplianceTier()
+            {
+                Name = section.Title,
+                Order = order,
+                Description = section.Content,
+                ChildTiers = new(),
+                Obligations = new()
+            };
+            complianceModel.ComplianceTiers.Add(childTier);
+            AddTierChildren(section, childTier, regSectionSearchResponse);
         }
 
         private static void AddTierChildren(RegSection section, ComplianceTier tier, List<RegSection> allSections)

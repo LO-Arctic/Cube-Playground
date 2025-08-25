@@ -9,32 +9,16 @@ namespace Cube_Playground
     {
         private static HttpClient httpClient;
         public static AuthenticationToken? authenticationToken;
-
-        public static Dictionary<string, string> stripHtml = new Dictionary<string, string>() { { "stripHtml", "true" } };
+        private static Dictionary<string, string> stripHtml = new Dictionary<string, string>() { { "stripHtml", "true" } };
 
         static CubeService()
         {
             httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-            httpClient.DefaultRequestHeaders.Add("accept", "text/plain");
-            httpClient.DefaultRequestHeaders.Add("x-page-current", "1");
-            httpClient.DefaultRequestHeaders.Add("x-page-length", "50");
-            httpClient.DefaultRequestHeaders.Add("api-version", "2.0");
         }
 
         public static async Task<bool> GetAuthenticationToken(string userName, string password, string clientId, string clientSecret)
         {
-            FormUrlEncodedContent formContent = new FormUrlEncodedContent(
-                new Dictionary<string, string>
-                {
-                        { "grant_type", "password" },
-                        { "username", userName },
-                        { "password", password },
-                        { "audience", "RegConnectApi" },
-                        { "scope", "cubeapi" },
-                        { "client_id", clientId },
-                        { "client_secret", clientSecret }
-                });
+            FormUrlEncodedContent formContent = CreateConnectFormContent(userName, password, clientId, clientSecret);
 
             HttpResponseMessage httpResponse = await httpClient.PostAsync(CubeEndpoints.TokenUrl, formContent);
 
@@ -51,33 +35,34 @@ namespace Cube_Playground
 
             }
             authenticationToken = AuthenticationToken.Create(responseContent);
-            httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {authenticationToken.access_token}");
 
             return true;
         }
 
-        public static async Task<List<RegBook>> RegBookSearch(RegBookSearchRequest request) => await CubeService.JsonAPIPost<List<RegBook>>(CubeEndpoints.RegBookSearch, request, null, stripHtml) ?? new();
-
-        public static async Task<List<RegSection>> RegSectionSearch(Guid sourceId, int versionOrdinal) => await CubeService.JsonAPIGet<List<RegSection>>(CubeEndpoints.RegSection, new List<string> { sourceId.ToString(), versionOrdinal.ToString() }, stripHtml) ?? new();
-
-        public static async Task<T?> JsonAPIPost<T>(string url, CubeRequest request, List<string>? urlParameters = null, Dictionary<string, string>? queryParams = null) where T : new()
+        private static FormUrlEncodedContent CreateConnectFormContent(string userName, string password, string clientId, string clientSecret)
         {
-            return await JsonAPICall<T>(url, urlParameters, queryParams, async (parametrizedUrl) =>
-            {
-                return await httpClient.PostAsJsonAsync(parametrizedUrl, request);
-            }) ?? new();
+            return new FormUrlEncodedContent(
+                new Dictionary<string, string>
+                {
+                        { CubeFormParameter.GrantType, CubeFormParameterValue.GrantTypePassword},
+                        { CubeFormParameter.Username, userName },
+                        { CubeFormParameter.Password, password },
+                        { CubeFormParameter.Audience, CubeFormParameterValue.AudienceRegConnect },
+                        { CubeFormParameter.Scope, CubeFormParameterValue.ScopeCubeApi },
+                        { CubeFormParameter.ClientId, clientId },
+                        { CubeFormParameter.ClientSecret, clientSecret }
+                });
         }
 
-        public static async Task<T?> JsonAPIGet<T>(string url, List<string>? urlParameters = null, Dictionary<string, string>? queryParams = null) where T : new()
-        {
-            return await JsonAPICall<T>(url, urlParameters, queryParams, async (parametrizedUrl) =>
-            {
-                return await httpClient.GetAsync(parametrizedUrl);
-            }) ?? new();
-        }
+        public static async Task<List<RegBook>> RegBookSearch(RegBookSearchRequest request) => await PagedJsonAPICall<RegBook>(HttpMethod.Post, CubeEndpoints.RegBookSearch, null, stripHtml, request) ?? new();
 
-        private static async Task<T?> JsonAPICall<T>(string url, List<string>? urlParams, Dictionary<string, string>? queryParams, Func<string, Task<HttpResponseMessage>> serverCall) where T : new()
+        public static async Task<List<RegSection>> RegSectionSearch(Guid sourceId, int versionOrdinal) => await PagedJsonAPICall<RegSection>(HttpMethod.Get, CubeEndpoints.RegSection, new List<string> { sourceId.ToString(), versionOrdinal.ToString() }, stripHtml) ?? new();
+
+        private static async Task<List<T>?> PagedJsonAPICall<T>(HttpMethod method, string url, List<string>? urlParams, Dictionary<string, string>? queryParams, CubeModel? request = null) where T : CubeModel
         {
+            int xPageCurrent = 1;
+            int xPageRecords = 1;
+
             if (string.IsNullOrWhiteSpace(url))
             {
                 throw new ArgumentNullException(nameof(url));
@@ -88,25 +73,51 @@ namespace Cube_Playground
                 throw new Exception("Authentication token is not set.");
             }
 
-            string parametrizedUrl = FormatUrl(url, urlParams, queryParams);
-
-            HttpResponseMessage httpResponse = await serverCall(parametrizedUrl);
-
-            string responseBody = await httpResponse.Content.ReadAsStringAsync();
-
-            if (!httpResponse.IsSuccessStatusCode)
+            List<T> result = new();
+            do
             {
-                throw new Exception($"{httpResponse.StatusCode}: {httpResponse.ReasonPhrase}. {responseBody}");
-            }
+                HttpRequestMessage httpRequest = CreateHttpRequest(method, FormatUrl(url, urlParams, queryParams), request);
+                httpRequest.Headers.Add(CubeHttpHeader.XPageCurrent, (xPageCurrent++).ToString());
 
-            if (string.IsNullOrEmpty(responseBody))
-            {
-                return new();
-            }
+                HttpResponseMessage httpResponse = await httpClient.SendAsync(httpRequest);
+                string responseBody = await httpResponse.Content.ReadAsStringAsync();
+                xPageRecords = httpResponse.Headers.Contains(CubeHttpHeader.XPageRecords) ? int.Parse(httpResponse.Headers.GetValues(CubeHttpHeader.XPageRecords).First()) : 1;
 
-            return JsonConvert.DeserializeObject<T>(responseBody) ?? new();
+                if (string.IsNullOrEmpty(responseBody))
+                {
+                    return result;
+                }
+
+                if (!httpResponse.IsSuccessStatusCode)
+                {
+                    throw new Exception($"{httpResponse.StatusCode}: {httpResponse.ReasonPhrase}. {responseBody}");
+                }
+
+                List<T> currentPageRecords = JsonConvert.DeserializeObject<List<T>>(responseBody) ?? new();
+
+                result.AddRange(currentPageRecords);
+
+            } while (xPageCurrent <= xPageRecords);
+
+            return result;
         }
 
+        private static HttpRequestMessage CreateHttpRequest(HttpMethod method, string url, CubeModel request)
+        {
+            HttpRequestMessage httpRequest = new()
+            {
+                RequestUri = new Uri(url),
+                Method = method,
+                Content = request != null ? JsonContent.Create(request) : null
+            };
+
+            httpRequest.Headers.Add(CubeHttpHeader.Accept, CubeHttpHeaderValue.JsonContentType);
+            httpRequest.Headers.Add(CubeHttpHeader.Accept, CubeHttpHeaderValue.TextContentType);
+            httpRequest.Headers.Add(CubeHttpHeader.XPageLength, CubeHttpHeaderValue.XPageLength);
+            httpRequest.Headers.Add(CubeHttpHeader.ApiVersion, CubeHttpHeaderValue.ApiVersion);
+            httpRequest.Headers.Add(CubeHttpHeader.Authorization, string.Format(CubeHttpHeaderValue.Authorization, authenticationToken?.access_token));
+            return httpRequest;
+        }
 
         private static string FormatUrl(string url, List<string>? urlParameters, Dictionary<string, string>? queryParams)
         {
