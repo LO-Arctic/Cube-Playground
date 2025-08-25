@@ -39,21 +39,6 @@ namespace Cube_Playground
             return true;
         }
 
-        private static FormUrlEncodedContent CreateConnectFormContent(string userName, string password, string clientId, string clientSecret)
-        {
-            return new FormUrlEncodedContent(
-                new Dictionary<string, string>
-                {
-                        { CubeFormParameter.GrantType, CubeFormParameterValue.GrantTypePassword},
-                        { CubeFormParameter.Username, userName },
-                        { CubeFormParameter.Password, password },
-                        { CubeFormParameter.Audience, CubeFormParameterValue.AudienceRegConnect },
-                        { CubeFormParameter.Scope, CubeFormParameterValue.ScopeCubeApi },
-                        { CubeFormParameter.ClientId, clientId },
-                        { CubeFormParameter.ClientSecret, clientSecret }
-                });
-        }
-
         public static async Task<List<RegBook>> RegBookSearch(RegBookSearchRequest request) => await PagedJsonAPICall<RegBook>(HttpMethod.Post, CubeEndpoints.RegBookSearch, null, stripHtml, request) ?? new();
 
         public static async Task<List<RegSection>> RegSectionSearch(Guid sourceId, int versionOrdinal) => await PagedJsonAPICall<RegSection>(HttpMethod.Get, CubeEndpoints.RegSection, new List<string> { sourceId.ToString(), versionOrdinal.ToString() }, stripHtml) ?? new();
@@ -117,6 +102,21 @@ namespace Cube_Playground
             httpRequest.Headers.Add(CubeHttpHeader.ApiVersion, CubeHttpHeaderValue.ApiVersion);
             httpRequest.Headers.Add(CubeHttpHeader.Authorization, string.Format(CubeHttpHeaderValue.Authorization, authenticationToken?.access_token));
             return httpRequest;
+        }
+
+        private static FormUrlEncodedContent CreateConnectFormContent(string userName, string password, string clientId, string clientSecret)
+        {
+            return new FormUrlEncodedContent(
+                new Dictionary<string, string>
+                {
+                        { CubeFormParameter.GrantType, CubeFormParameterValue.GrantTypePassword},
+                        { CubeFormParameter.Username, userName },
+                        { CubeFormParameter.Password, password },
+                        { CubeFormParameter.Audience, CubeFormParameterValue.AudienceRegConnect },
+                        { CubeFormParameter.Scope, CubeFormParameterValue.ScopeCubeApi },
+                        { CubeFormParameter.ClientId, clientId },
+                        { CubeFormParameter.ClientSecret, clientSecret }
+                });
         }
 
         private static string FormatUrl(string url, List<string>? urlParameters, Dictionary<string, string>? queryParams)
