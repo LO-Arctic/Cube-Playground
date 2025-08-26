@@ -46,7 +46,7 @@ namespace Cube_Playground
         private static async Task<List<T>?> PagedJsonAPICall<T>(HttpMethod method, string url, List<string>? urlParams, Dictionary<string, string>? queryParams, CubeModel? request = null) where T : CubeModel
         {
             int xPageCurrent = 1;
-            int xPageRecords = 1;
+            int xPageCount = 1;
 
             if (string.IsNullOrWhiteSpace(url))
             {
@@ -66,7 +66,7 @@ namespace Cube_Playground
 
                 HttpResponseMessage httpResponse = await httpClient.SendAsync(httpRequest);
                 string responseBody = await httpResponse.Content.ReadAsStringAsync();
-                xPageRecords = httpResponse.Headers.Contains(CubeHttpHeader.XPageRecords) ? int.Parse(httpResponse.Headers.GetValues(CubeHttpHeader.XPageRecords).First()) : 1;
+                xPageCount = int.Parse(GetResponseHeaderValue(httpResponse, CubeHttpHeader.XPageCount, "1"));
 
                 if (string.IsNullOrEmpty(responseBody))
                 {
@@ -82,9 +82,14 @@ namespace Cube_Playground
 
                 result.AddRange(currentPageRecords);
 
-            } while (xPageCurrent <= xPageRecords);
+            } while (xPageCurrent <= xPageCount);
 
             return result;
+        }
+
+        private static string GetResponseHeaderValue(HttpResponseMessage httpResponse, string headerName, string defaultValue = "")
+        {
+            return httpResponse.Headers.Contains(headerName) ? httpResponse.Headers.GetValues(headerName).First() : defaultValue;
         }
 
         private static HttpRequestMessage CreateHttpRequest(HttpMethod method, string url, CubeModel request)

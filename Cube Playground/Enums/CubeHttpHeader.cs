@@ -8,5 +8,6 @@
         public static string Authorization = "Authorization";
         public static string XPageRecords = "x-page-records";
         public static string XPageCurrent = "x-page-current";
+        public static string XPageCount = "x-page-count";
     }
 }
