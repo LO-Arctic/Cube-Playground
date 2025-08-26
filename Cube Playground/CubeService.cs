@@ -16,7 +16,7 @@ namespace Cube_Playground
             httpClient = new HttpClient();
         }
 
-        public static async Task<bool> GetAuthenticationToken(string userName, string password, string clientId, string clientSecret)
+        public static async Task GetAuthenticationToken(string userName, string password, string clientId, string clientSecret)
         {
             FormUrlEncodedContent formContent = CreateConnectFormContent(userName, password, clientId, clientSecret);
 
@@ -35,8 +35,6 @@ namespace Cube_Playground
 
             }
             authenticationToken = AuthenticationToken.Create(responseContent);
-
-            return true;
         }
 
         public static async Task<List<RegBook>> RegBookSearch(RegBookSearchRequest request) => await PagedJsonAPICall<RegBook>(HttpMethod.Post, CubeEndpoints.RegBookSearch, null, stripHtml, request) ?? new();
