@@ -38,10 +38,17 @@ namespace Cube_Playground
                 Console.WriteLine("Loading Books");
                 List<RegBook> regBookSearchResponse = await CubeService.RegBookSearch(new RegBookSearchRequest() { BookPublishStatus = "Published" });
                 Console.WriteLine($"Found {regBookSearchResponse.Count} books.");
+
+                int i = 0;
+                foreach (RegBook book in regBookSearchResponse)
+                {
+                    Console.WriteLine($"Book Title {i++}: {book.Title}");
+                }
+
                 Console.WriteLine();
-                RegBook myBook = regBookSearchResponse.First();
-                Console.WriteLine($"First Book Title: {myBook.Title}");
-                Console.WriteLine($"First Book Source Id: {myBook.SourceId}");
+                RegBook myBook = regBookSearchResponse[4];
+                Console.WriteLine($"Selected Book Title: {myBook.Title}");
+                Console.WriteLine($"Selected Book Source Id: {myBook.SourceId}");
 
                 List<RegSection> regSectionSearchResponse = await CubeService.RegSectionSearch(myBook.SourceId, myBook.VersionOrdinal);
                 Console.WriteLine();
@@ -64,6 +71,9 @@ namespace Cube_Playground
                 }
 
                 string jsonComplianceImportModel = JsonConvert.SerializeObject(complianceImportModel, Formatting.None, new JsonSerializerSettings());
+                string fileName = $"{myBook.Title}.json";
+                if (File.Exists(fileName)) File.Delete(fileName);
+                File.AppendAllText(fileName, jsonComplianceImportModel);
 
             }
             catch (Exception ex)
@@ -91,16 +101,29 @@ namespace Cube_Playground
             int order = 0;
             foreach (RegSection childSection in allSections.Where(x => x.ParentId == section.SectionId))
             {
-                ComplianceTier childTier = new ComplianceTier()
+                if (!allSections.Any(x => x.ParentId == childSection.SectionId))
                 {
-                    Name = childSection.Title,
-                    Order = order++,
-                    Description = childSection.Content,
-                    Obligations = new(),
-                    ChildTiers = new()
-                };
-                tier.ChildTiers.Add(childTier);
-                AddTierChildren(childSection, childTier, allSections);
+                    ComplianceObligation obligation = new()
+                    {
+                        Name = childSection.Title,
+                        Description = !string.IsNullOrWhiteSpace(childSection.Content) ? childSection.Content : "No Description",
+                        Order = order++
+                    };
+                    tier.Obligations.Add(obligation);
+                }
+                else
+                {
+                    ComplianceTier childTier = new ComplianceTier()
+                    {
+                        Name = childSection.Title,
+                        Order = order++,
+                        Description = childSection.Content,
+                        Obligations = new(),
+                        ChildTiers = new()
+                    };
+                    tier.ChildTiers.Add(childTier);
+                    AddTierChildren(childSection, childTier, allSections);
+                }
             }
         }
 

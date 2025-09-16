@@ -90,7 +90,7 @@ namespace Cube_Playground
             return httpResponse.Headers.Contains(headerName) ? httpResponse.Headers.GetValues(headerName).First() : defaultValue;
         }
 
-        private static HttpRequestMessage CreateHttpRequest(HttpMethod method, string url, CubeModel request)
+        private static HttpRequestMessage CreateHttpRequest(HttpMethod method, string url, CubeModel? request)
         {
             HttpRequestMessage httpRequest = new()
             {
